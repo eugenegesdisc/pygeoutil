@@ -68,6 +68,7 @@ def mosaic(the_args):
     # Not implemented for all
     if the_args.uncertainty:
         for the_ue_suffix in the_args.uncertainty:
+            print("THE_UE_FILES=",_retrieve_and_save_uncertainty(
                 the_args,the_ue_suffix,the_files,
                 the_same_spatial_ref,
                 the_spatial_ref,
