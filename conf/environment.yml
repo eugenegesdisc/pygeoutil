@@ -1,0 +1,12 @@
+name: py311geoutil
+channels:
+  - conda-forge
+dependencies:
+  - python==3.11
+  - gdal==3.8.2
+  - affine==2.4.0
+  - pyresample==1.27.0
+  - pyproj==3.6.1
+  - dask
+  - xarrqy
+  - pyproj
