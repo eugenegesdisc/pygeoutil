@@ -188,20 +188,7 @@ def to_geotiff(args):
         area_extent=(args.grid_extent[0],
                      args.grid_extent[1],
                      args.grid_extent[2],
-                     args.grid_extent[3])
-    )
-    if args.debug:
-        print("AREA DEFINITION=")
-        print("area_id=", args.area_id[0],
-            "description=", args.description[0],
-            "proj_id=",args.proj_id[0],
-            "projection=", args.projection[0],
-            "width=",args.grid_width[0],
-            "height=",args.grid_height[0],
-            "area_extent=(", 
-            args.grid_extent[0],args.grid_extent[1],
-            args.grid_extent[2],args.grid_extent[3],
-            ")")
+                     args.grid_extent[3]))
 
     if args.debug:
         print("area_def=", area_def)
@@ -270,6 +257,7 @@ def to_geotiff(args):
                 print("The_Fill_Value=", the_fill_value)
             the_layers = _get_layers(the_ds[the_v], xlongitude.dims)
 
+            # _to_geotiff(the_ds[the_v], outfilename+"."+the_v)
             _process_layers(args, the_v_data, the_layers, 
                             xlongitude, ylatitude, the_dim_layers,
                             area_def,args.output[0], the_v,
@@ -429,7 +417,7 @@ def _gdal_save_to_geotiff(
         print("dtype=", the_data.dtype, "gdaltype=",the_type)
     out_ds = the_drive.Create(outfilename, width, height, 1, the_type)
 
-    # define and set outpu geotransform
+
     geo_transform = [grid_def.area_extent[0],
                     grid_def.pixel_size_x,0,
                     grid_def.area_extent[3],0,
@@ -438,7 +426,7 @@ def _gdal_save_to_geotiff(
         print("gt=",geo_transform)
     out_ds.SetGeoTransform(geo_transform)
 
-    # create and set output projection
+
     srs = osr.SpatialReference()
     srs.ImportFromProj4(grid_def.proj4_string)
     srs.SetProjCS(grid_def.proj_id)
@@ -725,7 +713,6 @@ def _resample_kd_tree_gauss_data(args, the_data, swath_def,
             with_uncert=True)
     else:
         the_data_np = the_data.to_numpy()
-        # the_data_np[the_data_np == fill_value] = np.nan
         the_data_np = np.ma.masked_where(the_data_np == fill_value, the_data_np)
         np.ma.set_fill_value(the_data_np,np.nan)
         the_result = kd_tree.resample_gauss(
@@ -759,11 +746,22 @@ def _resample_ewa_data(args, the_data, swath_def,
         args.uncertainty_estimate.lower() == "bias"):
         resampler = ewa.DaskEWAResampler(source_geo_def=swath_def,
                                         target_geo_def=grid_def)
-        the_data = the_data.rename({"scanline":"y","ground_pixel":"x"})
+        _ty = _get_axis(the_data.dims,"line")
+        if not _ty:
+            _ty = "scanline"
+        _tx = _get_axis(the_data.dims,"pixel")
+        if not _tx:
+            _tx = "ground_pixel"
+        the_data = the_data.rename({_ty:"y",_tx:"x"})
         the_da_array = the_data
+        _the_old_type = the_da_array.dtype
+        the_da_array = the_da_array.astype(np.float64)
+        the_da_array = the_da_array.where(the_da_array != fill_value, np.nan)
         result = resampler.resample(data=the_da_array,
                                     rows_per_scan=rows_per_scan)
         the_result = result.compute().to_numpy()
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
         the_result2 = kd_tree.resample_nearest(
             source_geo_def=grid_def,
             data=the_result,
@@ -771,8 +769,13 @@ def _resample_ewa_data(args, the_data, swath_def,
             radius_of_influence=radius,
             epsilon=epsilon,
             fill_value=fill_value)
+        _the_old_type = the_result2.dtype
+        the_result2 = the_result2.astype(np.float64)
+        the_result2 = np.where(the_result2 == fill_value, np.nan, the_result2)
         the_result3 = resampler.resample(data=the_result2,
                                     rows_per_scan=rows_per_scan)
+        the_result3 = np.nan_to_num(the_result3, nan=fill_value)
+        the_result3 = the_result3.astype(_the_old_type)
         the_ue = the_result - the_result3
         if args.debug:
             print("shape of the_bias=", the_ue.shape)
@@ -782,7 +785,13 @@ def _resample_ewa_data(args, the_data, swath_def,
                                         target_geo_def=grid_def)
         if args.debug:
             print("BEFORE dims=", the_data.dims)
-        the_data = the_data.rename({"scanline":"y","ground_pixel":"x"})
+        _ty = _get_axis(the_data.dims,"line")
+        if not _ty:
+            _ty = "scanline"
+        _tx = _get_axis(the_data.dims,"pixel")
+        if not _tx:
+            _tx = "ground_pixel"
+        the_data = the_data.rename({_ty:"y",_tx:"x"})
         if args.debug:
             print("AFTER dims=", the_data.dims)
         if args.debug:
@@ -793,10 +802,14 @@ def _resample_ewa_data(args, the_data, swath_def,
             print("grid_def ndim=",grid_def.ndim)
             print("rows_per_scan=",rows_per_scan)
             print("dims=", the_data.dims)
-        the_da_array = the_data
+        _the_old_type = the_data.dtype
+        the_da_array = the_data.astype(np.float64)
+        the_da_array = the_da_array.where(the_da_array != fill_value, np.nan)
         result = resampler.resample(data=the_da_array,
                                     rows_per_scan=rows_per_scan)
         the_result = result.compute().to_numpy()
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
     return the_result, the_ue, the_ue_count
 
 def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
@@ -825,13 +838,23 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
         the_swath_def = geometry.SwathDefinition(lons=the_lons_r,lats=the_lats_r)
         resampler = ewa.LegacyDaskEWAResampler(source_geo_def=the_swath_def,
                                         target_geo_def=grid_def)
-        the_data = the_data.rename({"scanline":"y","ground_pixel":"x"})
+        _ty = _get_axis(the_data.dims,"line")
+        if not _ty:
+            _ty = "scanline"
+        _tx = _get_axis(the_data.dims,"pixel")
+        if not _tx:
+            _tx = "ground_pixel"
+        the_data = the_data.rename({_ty:"y",_tx:"x"})
         the_da_array = xr.DataArray(dask.array.from_array(the_data, chunks={}))
+        _the_old_type = the_data.dtype
+        the_da_array = the_data.astype(np.float64)
+        the_da_array = the_da_array.where(the_da_array != fill_value, np.nan)
         result = resampler.resample(data=the_da_array,
                                     rows_per_scan=rows_per_scan)
-        #,
-        #                            fill_value=fill_value)
+
         the_result = result.compute().to_numpy()
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
         the_result2 = kd_tree.resample_nearest(
             source_geo_def=grid_def,
             data=the_result,
@@ -840,11 +863,15 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
             epsilon=epsilon,
             fill_value=fill_value)
         the_da_array3 = xr.DataArray(dask.array.from_array(the_result2, chunks={}))
+        _the_old_type = the_da_array3.dtype
+        the_da_array3 = the_da_array3.astype(np.float64)
+        the_da_array3 = the_da_array3.where(the_da_array3 != fill_value, np.nan)
         result3 = resampler.resample(data=the_da_array3,
                                     rows_per_scan=rows_per_scan)
-        #,
-        #                            fill_value=fill_value)
+
         the_result3 = result3.compute().to_numpy()
+        the_result3 = np.nan_to_num(the_result3, nan=fill_value)
+        the_result3 = the_result3.astype(_the_old_type)
         the_ue = the_result - the_result3
     else:
         the_lons, the_lats = swath_def.get_lonlats()
@@ -856,7 +883,13 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
         if args.debug:
             print("BEFORE dims=", the_data.dims)
             print("dims")
-        the_data = the_data.rename({"scanline":"y","ground_pixel":"x"})
+        _ty = _get_axis(the_data.dims,"line")
+        if not _ty:
+            _ty = "scanline"
+        _tx = _get_axis(the_data.dims,"pixel")
+        if not _tx:
+            _tx = "ground_pixel"
+        the_data = the_data.rename({_ty:"y",_tx:"x"})
         if args.debug:
             print("AFTER dims=", the_data.dims)
             print("AFTER data=", the_data)
@@ -869,11 +902,15 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
             print("rows_per_scan=",rows_per_scan)
             print("dims=", the_data.dims)
         the_da_array = xr.DataArray(dask.array.from_array(the_data, chunks={}))
+        _the_old_type = the_data.dtype
+        the_da_array = the_data.astype(np.float64)
+        the_da_array = the_da_array.where(the_da_array != fill_value, np.nan)
         result = resampler.resample(data=the_da_array,
                                     rows_per_scan=rows_per_scan)
-        #,
-        #                            fill_value=fill_value)
+
         the_result = result.compute().to_numpy()
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
     return the_result, the_ue, the_ue_count
 
 
@@ -897,15 +934,17 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
         args.uncertainty_estimate.lower() == "bias"):
         swath_points_in_grid, cols, rows = ewa.ll2cr(swath_def, grid_def)
         the_data_np = the_data.to_numpy()
-        # the_data_np[the_data_np == fill_value] = np.nan
-        the_data_np = np.ma.masked_where(the_data_np == fill_value, the_data_np)
-        np.ma.set_fill_value(the_data_np,np.nan)
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
         num_valid_points, gridded_data= ewa.fornav(
             cols=cols, rows=rows, area_def=grid_def,
             data_in=the_data_np,
             rows_per_scan=rows_per_scan,fill=fill_value
         )
         the_result = gridded_data
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
         the_result2 = kd_tree.resample_nearest(
             source_geo_def=grid_def,
             data=the_result,
@@ -914,17 +953,22 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
             epsilon=epsilon,
             fill_value=fill_value)
         swath_points_in_grid3, cols3, rows3 = ewa.ll2cr(swath_def, grid_def)
+        _the_old_type = the_result2.dtype
+        the_result2 = the_result2.astype(np.float64)
+        the_result2 = np.where(the_result2 == fill_value, np.nan, the_result2)
         num_valid_points3, gridded_data3= ewa.fornav(
             cols=cols3, rows=rows3, area_def=grid_def,
             data_in=the_result2,
             rows_per_scan=rows_per_scan,fill=fill_value
         )
         the_result3 = gridded_data3
+        the_result3 = np.nan_to_num(the_result3, nan=fill_value)
+        the_result3 = the_result3.astype(_the_old_type)
         the_init_value = 0
         if fill_value:
             the_init_value = fill_value
         the_ue = np.full(the_result.shape,the_init_value)
-        # ignore those where it is a pixel of fill value on either of the inputs
+
         the_condition = (the_result!=fill_value)&(the_result3!=fill_value)
         the_ue = np.subtract(the_result,
                              the_result3, out=the_ue,
@@ -944,8 +988,7 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
 
         # ll2cr convert swath longitudes and latitudes to grid columns and rows
         swath_points_in_grid, cols, rows = ewa.ll2cr(swath_def, grid_def)
-        # resampler = ewa.LegacyDaskEWAResampler(source_geo_def=swath_def,
-        #                                 target_geo_def=grid_def)
+
         if args.debug:
             print("swath_points_in_grid=", swath_points_in_grid)
             print("cols=", cols, " rows=", rows)
@@ -953,9 +996,9 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
             print("shape of the_data=", the_data.shape)
 
         the_data_np = the_data.to_numpy()
-        # the_data_np[the_data_np == fill_value] = np.nan
-        #the_data_np = np.ma.masked_where(the_data_np == fill_value, the_data_np)
-        #np.ma.set_fill_value(the_data_np,np.nan)
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
 
         num_valid_points, gridded_data= ewa.fornav(
             cols=cols, rows=rows, area_def=grid_def,
@@ -963,6 +1006,8 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
             rows_per_scan=rows_per_scan,fill=fill_value
         )
         the_result = gridded_data
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
     return the_result, the_ue, the_ue_count
 
 
@@ -1038,3 +1083,9 @@ def _to_geotiff_get_variables(the_rs, the_ref_axis):
                     the_ret.remove(var_name)
                     break 
     return the_ret
+
+def _get_axis(dims:list,key:str)->str:
+    for k in dims:
+        if key in k:
+            return k
+    return None

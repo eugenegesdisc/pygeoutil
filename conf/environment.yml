@@ -9,4 +9,6 @@ dependencies:
   - pyproj==3.6.1
   - dask
   - xarrqy
+  - rasterio
   - pyproj
+
