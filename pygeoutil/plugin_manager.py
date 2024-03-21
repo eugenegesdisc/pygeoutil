@@ -17,3 +17,9 @@ discovered_subcommand_plugins = {
     in iter_namespace(pygeoutil.models)
     if name.startswith("pygeoutil.models."+"pygeoutil_subcommand_")
 }
+#discovered_subcommand_plugins={
+#    name: importlib.import_module(name)
+#    for finder, name, ispkgin
+#    in pkgutil.iter_modules()
+#    if name.startswith('pygeoutil')
+#}

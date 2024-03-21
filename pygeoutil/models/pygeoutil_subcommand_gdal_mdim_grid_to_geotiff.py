@@ -102,17 +102,13 @@ def _gdal_mdimtranslate_variable_to_tif(the_var:tuple, the_output:str,
     the_ds = gdal.Open(the_var[0], gdal.GA_ReadOnly)
     the_proj = the_ds.GetProjection()
     if not the_proj:
-        print("No projection")
         the_proj = _get_wkt_spatialreference(the_proj_auth,the_proj_value)
-        print("the_proj=", the_proj)
         if the_proj:
             the_gdal_proj = osr.SpatialReference()
             the_status = the_gdal_proj.ImportFromWkt(the_proj)
-            print("the_status=", the_status,"the_gdal_proj=", the_gdal_proj.ExportToWkt())
 
     the_gdal_geotransform = the_ds.GetGeoTransform()
     if the_gdal_geotransform == (0.0, 1.0, 0.0, 0.0, 0.0, 1.0):
-        print("No transformation")
         if the_geotransform:
             the_gdal_geotransform=the_geotransform
     the_ds = gdal.MultiDimTranslate(the_output, the_ds)
@@ -157,7 +153,6 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
     :return outpath:            The local system filepath to output dataset
     """
 
-    # set up the projection and geotransform
     if force_custom is True:
         projection = cust_projection
         geotransform = cust_geotransform
@@ -165,7 +160,6 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
 
         gdal_projection = gdal_dataset.GetProjection()
 
-        # only uses the custom projection if gdal metadata is bad
         if gdal_projection == "":
             projection = cust_projection
         else:
@@ -173,18 +167,14 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
 
         gdal_geotransform = gdal_dataset.GetGeoTransform()
 
-        # only uses the custom geotransform if gdal geotransform is default (bad)
         if gdal_geotransform == (0.0, 1.0, 0.0, 0.0, 0.0, 1.0):
             geotransform = cust_geotransform
         else:
             geotransform = gdal_geotransform
 
-
-    # set up the numpy array
     numpy_array = gdal_dataset.ReadAsArray()
     shape = numpy_array.shape
 
-    # determine its shape
     if len(shape) == 2:
         xsize = shape[1]
         ysize = shape[0]
@@ -196,13 +186,11 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
     else:
         raise Exception("cannot write 1 dimensional data to tif")
 
-    # create the tiff
     gtiff = gdal.GetDriverByName("GTiff")
-    outdata = gtiff.Create(outpath, xsize, ysize, numbands, _convert_dtype(numpy_array.dtype))
+    outdata = gtiff.Create(outpath, xsize, ysize, numbands, convert_dtype(numpy_array.dtype))
     outdata.SetProjection(projection)
     outdata.SetGeoTransform(geotransform)
 
-    # write each band
     for i in range(numbands):
         outraster = outdata.GetRasterBand(i+1)
         outraster.WriteArray(numpy_array, 0, 0)
@@ -211,34 +199,6 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
         outraster.FlushCache()
 
     return outpath
-
-def _convert_dtype(numpy_dtype_string):
-    """
-    converts numpy dtype to a gdal data type object
-
-    :param numpy_dtype_string
-    :return gdal_datatype_object:
-    """
-
-    ndt = str(numpy_dtype_string)
-
-    if ndt == "float64":
-        return gdal.GDT_Float64
-
-    elif ndt == "float32":
-        return gdal.GDT_Float32
-
-    elif ndt == "uint32":
-        return gdal.GDT_UInt32
-
-    elif "unit" in ndt:
-        return gdal.GDT_UInt16
-
-    elif ndt == "int32":
-        return gdal.GDT_Int32
-
-    else:
-        return gdal.GDT_Int16
 
 def _filter_variable_by_valid_dimension(the_args, the_variables:list)->list:
     """
@@ -253,9 +213,6 @@ def _filter_variable_by_valid_dimension(the_args, the_variables:list)->list:
     """
     the_ret_variables = the_variables
     the_x, the_y = _get_maximum_size_from_variables(the_variables)
-    if the_args.debug:
-        print("the_x=", the_x, "the_y=", the_y)
-        print("valid_dimension", the_args.valid_dimension)
     if the_args.valid_dimension:
         the_ret_variables = _filter_variable_by_x_y_size(the_ret_variables,the_x, the_y)
 
@@ -316,7 +273,6 @@ def _filter_variable_by_group(the_args, the_variables:list)->list:
         )
     """
     the_ret_variables = the_variables
-    # Filter the group
     the_group = the_args.group
     if not the_group:
         the_group = "/"
@@ -324,8 +280,9 @@ def _filter_variable_by_group(the_args, the_variables:list)->list:
     if not the_group.startswith("/"):
         the_group = f"/{the_group}"
 
+    the_group = the_group.strip("/")
     the_ret_variables = [the_val for the_val in the_ret_variables
-                         if the_val[1].startswith(f"/{the_group}")]
+                         if the_val[1].strip("/").startswith(f"{the_group}")]
     return the_ret_variables
 
 def _filter_variable_by_variable_name(the_args, the_variables:list)->list:
@@ -344,7 +301,7 @@ def _filter_variable_by_variable_name(the_args, the_variables:list)->list:
     the_variable = the_args.variable
     if the_variable:
         the_ret_variables = [the_val for the_val in the_ret_variables
-                             if the_val[1].endswith(f"/{the_variable}")]
+                             if the_val[1].endswith(f"{the_variable}")]
     return the_ret_variables
 
 def _get_valid_subdatasets(the_args)->list:
@@ -429,23 +386,18 @@ def _gdal_to_geotiff(outname, result, nodata=None):
     driv = gdal.GetDriverByName('GTiff')
     the_d_type = eval("gdal.GDT_"+result.dtype.name.capitalize())
 
-    #define geotiff dimensons, array data, noDataValue (if none provide, set to 0)
     height,width = result.shape
     noDataVal = nodata
     if nodata is None:
         noDataVal = 0
 
-    # create dataset writer, specify dimensions
     dstds = driv.Create(outname, width, height, 1, the_d_type)
 
-    # define and set output geotransform
     gt = [-180, 0.1, 0, 90, 0, -0.1]
     dstds.SetGeoTransform(gt)
-    # create and set output projection
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(4326)
 
-    # write output array data
     dstds.GetRasterBand(1).SetNoDataValue(noDataVal)
     dstds.GetRasterBand(1).WriteArray(result.to_numpy())
     dstds = None
@@ -477,13 +429,11 @@ def _get_timedelta_fill_value(the_var_t):
     the_val_str = the_var_t.CodeMissingValue
     if the_val_str is None:
         print("Warning: no CodeMissingValue attribute found!")
-        # return the_ret, the_ret_unit
     else:
         the_val = int(the_val_str)
 
     the_unit_str = the_var_t.Units
     if the_unit_str is None:
-        print("Warning: no Units attribute found!")
         return the_ret, the_ret_unit
     the_unit = the_unit_str.lower()
 

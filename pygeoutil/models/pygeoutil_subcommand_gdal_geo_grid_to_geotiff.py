@@ -89,8 +89,7 @@ def _gdal_variable_to_tif(the_args, the_variables:list)->None:
         the_proj_auth, the_proj_value = the_args.projection
     if the_args.geotransform:
         the_geotransform = the_args.geotransform
-        if the_args.debug:
-            print("the_geotransform=", the_geotransform)
+        print("the_geotransform=", the_geotransform)
     for the_var in the_variables:
         the_var_path = the_var[1].replace('/','_')
         the_output_file = (f"{the_output}"
@@ -112,7 +111,7 @@ def _gdal_translate_variable_to_tif(the_var:tuple, the_output:str,
 
     the_gdal_geotransform = the_ds.GetGeoTransform()
     if the_gdal_geotransform == (0.0, 1.0, 0.0, 0.0, 0.0, 1.0):
-        print("Warning: No transformation. Use input.")
+        print("No transformation")
         if the_geotransform:
             the_gdal_geotransform=the_geotransform
     the_ref = None
@@ -184,21 +183,12 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
     the_band = gdal_dataset.GetRasterBand(1)
     datatype = the_band.DataType
 
-
-    # create the tiff
     gtiff = gdal.GetDriverByName("GTiff")
     outdata = gtiff.Create(outpath, xsize, ysize, numbands, datatype)
-    # 'SetProjection', 
     outdata.SetProjection(projection)
-    # 'SetGeoTransform', 
     outdata.SetGeoTransform(geotransform)
-    # 'SetDescription', 'SetGCPs', 
-    # 'SetMetadata', 'SetMetadataItem', 
     if gdal_dataset.GetMetadata():
         outdata.SetMetadata(gdal_dataset.GetMetadata())
-    # 'SetSpatialRef', 'SetStyleTable',
-
-    # write each band
     for i in range(numbands):
         outraster = outdata.GetRasterBand(i+1)
         the_band = gdal_dataset.GetRasterBand(i+1)
@@ -206,18 +196,14 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
         if transpose_first:
             numpy_array = numpy_array.T
         outraster.WriteArray(numpy_array, 0, 0)
-        #'SetCategoryNames', 
         if the_band.GetCategoryNames():
             outraster.SetCategoryNames(the_band.GetCategoryNames())
-        # 'SetColorInterpretation',
         if the_band.GetColorInterpretation():
             outraster.SetColorInterpretation(the_band.GetColorInterpretation())
-        # 'SetColorTable',
         if the_band.GetColorTable():
             outraster.SetColorTable(the_band.GetColorTable())
         if the_band.GetMetadata():
             outraster.SetMetadata(the_band.GetMetadata())
-        # 'SetNoDataValue','SetNoDataValueAsInt64', 'SetNoDataValueAsUInt64',
         if the_band.GetNoDataValue():
             outraster.SetNoDataValue(the_band.GetNoDataValue())
         outraster.FlushCache()
@@ -340,17 +326,13 @@ def _filter_variable_by_group(the_args, the_variables:list)->list:
         )
     """
     the_ret_variables = the_variables
-    # Filter the group
     the_group = the_args.group
     if not the_group:
         the_group = ""
     the_group = the_group.strip()
-    #if not the_group.startswith("/"):
-    #    the_group = f"/{the_group}"
 
-    print(f"[/]*{the_group}")
     the_ret_variables = [the_val for the_val in the_ret_variables
-                         if re.search(f"[/]*{the_group}",the_val[1])]
+                         if re.search(f"^[/]*{the_group}",the_val[1])]
     return the_ret_variables
 
 def _filter_variable_by_variable_name(the_args, the_variables:list)->list:
@@ -365,7 +347,6 @@ def _filter_variable_by_variable_name(the_args, the_variables:list)->list:
         )
     """
     the_ret_variables = the_variables
-    # Filter the variable
     the_variable = the_args.variable
     if the_variable:
         the_ret_variables = [the_val for the_val in the_ret_variables
@@ -425,20 +406,21 @@ def _parse_gdal_info_subset_value(the_value:str)->tuple[str, list[int], str]:
     the_ret_dtype = the_dtype_strs[0].lstrip('(').rstrip(')')
     return (the_ret_dataset, the_ret_shape, the_ret_dtype)
 
-#======================================
-
-def _replace_last(string, old, new):
-    if old not in string:
-        return string
-
-    index = string.rfind(old)
-
-    return string[:index] + new + string[index+len(old):]
-
 def _parse_gdal_info_subset_value_shape(the_shape_str:str)->list[int]:
     the_shape_strs = the_shape_str.strip('[').rstrip(']').split('x')
     the_ret_list = [int(v) for v in the_shape_strs]
     return the_ret_list
+
+def _replace_last(a_string:str, old:str, new:str):
+    if old not in a_string:
+        return a_string
+
+    index = a_string.rfind(old)
+
+    return a_string[:index] + new + a_string[index+len(old):]
+
+#======================================
+
 
 
 def to_geotiff(args):
@@ -458,12 +440,8 @@ def to_geotiff(args):
     with xr.open_dataset(inputdataset, group=ingroup, decode_cf=False) as the_ds:
         if invariables is None:
             invariables=_to_geotiff_get_variables(the_ds)
-        if args.debug:
-            print("dataset=", the_ds)
-            print("invaraibles=", invariables)
         for the_v in invariables:
-            if args.debug:
-                print("v=",the_v)
+            print("v=",the_v)
             _to_geotiff(the_ds[the_v], outfilename+"."+the_v)
 
 
@@ -476,7 +454,6 @@ def _to_geotiff_get_variables(the_rs):
 
 def _to_geotiff(the_var, the_out_tif):
     the_time = 'time'
-    # print(the_var)
     if not hasattr(the_var, the_time):
         print("Warning: it should not be here. Not prcessed.") # to be processed
     else:
@@ -509,23 +486,18 @@ def _gdal_to_geotiff(outname, result, nodata=None):
     driv = gdal.GetDriverByName('GTiff')
     the_d_type = eval("gdal.GDT_"+result.dtype.name.capitalize())
 
-    #define geotiff dimensons, array data, noDataValue (if none provide, set to 0)
     height,width = result.shape
     noDataVal = nodata
     if nodata is None:
         noDataVal = 0
 
-    # create dataset writer, specify dimensions
     dstds = driv.Create(outname, width, height, 1, the_d_type)
 
-    # define and set output geotransform
     gt = [-180, 0.1, 0, 90, 0, -0.1]
     dstds.SetGeoTransform(gt)
-    # create and set output projection
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(4326)
 
-    # write output array data
     dstds.GetRasterBand(1).SetNoDataValue(noDataVal)
     dstds.GetRasterBand(1).WriteArray(result.to_numpy())
     dstds = None

@@ -188,7 +188,20 @@ def to_geotiff(args):
         area_extent=(args.grid_extent[0],
                      args.grid_extent[1],
                      args.grid_extent[2],
-                     args.grid_extent[3]))
+                     args.grid_extent[3])
+    )
+    if args.debug:
+        print("AREA DEFINITION=")
+        print("area_id=", args.area_id[0],
+            "description=", args.description[0],
+            "proj_id=",args.proj_id[0],
+            "projection=", args.projection[0],
+            "width=",args.grid_width[0],
+            "height=",args.grid_height[0],
+            "area_extent=(", 
+            args.grid_extent[0],args.grid_extent[1],
+            args.grid_extent[2],args.grid_extent[3],
+            ")")
 
     if args.debug:
         print("area_def=", area_def)
@@ -236,7 +249,6 @@ def to_geotiff(args):
                          decode_cf=False) as the_ds:
         ylatitude=the_ds[y_variable]
 
-
     if args.debug:
         print("coords for xlongitude=", xlongitude.coords)
 
@@ -257,7 +269,6 @@ def to_geotiff(args):
                 print("The_Fill_Value=", the_fill_value)
             the_layers = _get_layers(the_ds[the_v], xlongitude.dims)
 
-            # _to_geotiff(the_ds[the_v], outfilename+"."+the_v)
             _process_layers(args, the_v_data, the_layers, 
                             xlongitude, ylatitude, the_dim_layers,
                             area_def,args.output[0], the_v,
@@ -417,7 +428,6 @@ def _gdal_save_to_geotiff(
         print("dtype=", the_data.dtype, "gdaltype=",the_type)
     out_ds = the_drive.Create(outfilename, width, height, 1, the_type)
 
-
     geo_transform = [grid_def.area_extent[0],
                     grid_def.pixel_size_x,0,
                     grid_def.area_extent[3],0,
@@ -425,7 +435,6 @@ def _gdal_save_to_geotiff(
     if args.debug:
         print("gt=",geo_transform)
     out_ds.SetGeoTransform(geo_transform)
-
 
     srs = osr.SpatialReference()
     srs.ImportFromProj4(grid_def.proj4_string)
@@ -513,8 +522,9 @@ def _resample_numpy_bilinear_data(args, the_data, swath_def,
     if (args.uncertainty_estimate and
         args.uncertainty_estimate.lower() == "bias"):
         the_data_np = the_data.to_numpy()
-        the_data_np = np.ma.masked_where(the_data_np == fill_value, the_data_np)
-        np.ma.set_fill_value(the_data_np,np.nan)
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
         resampler = bilinear.NumpyBilinearResampler(
             source_geo_def=swath_def,
             target_geo_def=grid_def,
@@ -536,14 +546,19 @@ def _resample_numpy_bilinear_data(args, the_data, swath_def,
             epsilon=epsilon)
         the_result3=resampler3.resample(
             data=the_result2,fill_value=np.nan)
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
+        the_result3 = np.nan_to_num(the_result3, nan=fill_value)
+        the_result3 = the_result3.astype(_the_old_type)
         the_ue = the_result - the_result3
         if args.debug:
             print("shape of the_bias=", the_ue.shape)
             print("value of 200,200", the_ue[200][200])
     else:
         the_data_np = the_data.to_numpy()
-        the_data_np = np.ma.masked_where(the_data_np == fill_value, the_data_np)
-        np.ma.set_fill_value(the_data_np,np.nan)
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
         resampler = bilinear.NumpyBilinearResampler(
             source_geo_def=swath_def,
             target_geo_def=grid_def,
@@ -551,6 +566,8 @@ def _resample_numpy_bilinear_data(args, the_data, swath_def,
             epsilon=epsilon)
         the_result=resampler.resample(
             data=the_data_np,fill_value=np.nan)
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
     return the_result, the_ue, the_ue_count
 
 def _resample_image_bilinear_data(args, the_data, swath_def,
@@ -633,7 +650,6 @@ def _resample_kd_tree_nearest_data(args, the_data, swath_def,
         if fill_value:
             the_init_value = fill_value
         the_ue = np.full(the_result.shape,the_init_value)
-        # ignore those where it is a pixel of fill value on either of the inputs
         the_condition = (the_result!=fill_value)&(the_result3!=fill_value)
         the_ue = np.subtract(the_result,
                              the_result3, out=the_ue,
@@ -665,6 +681,9 @@ def _resample_kd_tree_gauss_data(args, the_data, swath_def,
     if (args.uncertainty_estimate and
         args.uncertainty_estimate.lower() == "bias"):
         the_data_np = the_data.to_numpy()
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
         the_result = kd_tree.resample_gauss(
             source_geo_def=swath_def,
             data=the_data_np,
@@ -691,6 +710,10 @@ def _resample_kd_tree_gauss_data(args, the_data, swath_def,
         the_init_value = 0
         if fill_value:
             the_init_value = fill_value
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
+        the_result3 = np.nan_to_num(the_result3, nan=fill_value)
+        the_result3 = the_result3.astype(_the_old_type)
         the_ue = np.full(the_result.shape,the_init_value)
         the_condition = (the_result!=fill_value)&(the_result3!=fill_value)
         the_ue = np.subtract(the_result,
@@ -702,6 +725,9 @@ def _resample_kd_tree_gauss_data(args, the_data, swath_def,
     elif (args.uncertainty_estimate and
           args.uncertainty_estimate.lower() == "standard_deviation"):
         the_data_np = the_data.to_numpy()
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
         the_result, the_ue, the_ue_count = kd_tree.resample_gauss(
             source_geo_def=swath_def,
             data=the_data_np,
@@ -711,10 +737,13 @@ def _resample_kd_tree_gauss_data(args, the_data, swath_def,
             epsilon=epsilon,
             fill_value=fill_value,
             with_uncert=True)
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
     else:
         the_data_np = the_data.to_numpy()
-        the_data_np = np.ma.masked_where(the_data_np == fill_value, the_data_np)
-        np.ma.set_fill_value(the_data_np,np.nan)
+        _the_old_type = the_data_np.dtype
+        the_data_np = the_data_np.astype(np.float64)
+        the_data_np = np.where(the_data_np == fill_value, np.nan, the_data_np)
         the_result = kd_tree.resample_gauss(
             source_geo_def=swath_def,
             data=the_data_np,
@@ -723,6 +752,8 @@ def _resample_kd_tree_gauss_data(args, the_data, swath_def,
             sigmas=sigmas,
             epsilon=epsilon,
             fill_value=np.nan)
+        the_result = np.nan_to_num(the_result, nan=fill_value)
+        the_result = the_result.astype(_the_old_type)
     return the_result, the_ue, the_ue_count
 
 
@@ -851,7 +882,6 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
         the_da_array = the_da_array.where(the_da_array != fill_value, np.nan)
         result = resampler.resample(data=the_da_array,
                                     rows_per_scan=rows_per_scan)
-
         the_result = result.compute().to_numpy()
         the_result = np.nan_to_num(the_result, nan=fill_value)
         the_result = the_result.astype(_the_old_type)
@@ -868,7 +898,6 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
         the_da_array3 = the_da_array3.where(the_da_array3 != fill_value, np.nan)
         result3 = resampler.resample(data=the_da_array3,
                                     rows_per_scan=rows_per_scan)
-
         the_result3 = result3.compute().to_numpy()
         the_result3 = np.nan_to_num(the_result3, nan=fill_value)
         the_result3 = the_result3.astype(_the_old_type)
@@ -907,7 +936,6 @@ def _resample_ewa_legacy_dask_data(args, the_data, swath_def,
         the_da_array = the_da_array.where(the_da_array != fill_value, np.nan)
         result = resampler.resample(data=the_da_array,
                                     rows_per_scan=rows_per_scan)
-
         the_result = result.compute().to_numpy()
         the_result = np.nan_to_num(the_result, nan=fill_value)
         the_result = the_result.astype(_the_old_type)
@@ -968,7 +996,6 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
         if fill_value:
             the_init_value = fill_value
         the_ue = np.full(the_result.shape,the_init_value)
-
         the_condition = (the_result!=fill_value)&(the_result3!=fill_value)
         the_ue = np.subtract(the_result,
                              the_result3, out=the_ue,
@@ -986,9 +1013,7 @@ def _resample_ewa_legacy_function_data(args, the_data, swath_def,
             print("rows_per_scan=",rows_per_scan)
             print("dims=", the_data.dims)
 
-        # ll2cr convert swath longitudes and latitudes to grid columns and rows
         swath_points_in_grid, cols, rows = ewa.ll2cr(swath_def, grid_def)
-
         if args.debug:
             print("swath_points_in_grid=", swath_points_in_grid)
             print("cols=", cols, " rows=", rows)

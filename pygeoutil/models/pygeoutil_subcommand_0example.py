@@ -6,6 +6,7 @@ def add_cli_arg(the_main_parsers):
     """
         A subcommand plugin.
     """
+    #print("Add argument here - ", the_main_parsers)
     the_subcommand = the_main_parsers.add_parser("0example",
                                         description="This is a template. 'example0' will be "
                                         "the name of the subcommand to be added. There should be "

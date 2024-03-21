@@ -52,6 +52,14 @@ def process_args(args):
         the_plugin = plugin_manager.discovered_subcommand_plugins.get(the_sub_cmd)
         if the_plugin is not None:
             the_plugin.process(args)
+    #if args.cmd == "geogridtogeotiff":
+    #    geo_grid_to_geotiff.to_geotiff(args)
+    #elif args.cmd == "gdalgeogridtogeotiff":
+    #    gdal_geo_grid_to_geotiff.to_geotiff(args)
+    #elif args.cmd == "swathtogeotiff":
+    #    swath_to_geotiff.to_geotiff(args)
+    #else:
+    #    print(f"Unrecognized command {args.cmd}")
 
 def cli(prog_name="python cli.py"):
     """

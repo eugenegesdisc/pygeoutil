@@ -77,9 +77,11 @@ def mosaic(the_args):
 def _get_ue_files(the_args,the_files,the_ue_suffix):
     the_ue_files = list()
     i = 0
+    print("TTTTTthe_files=", the_files)
     for the_f0 in the_files:
         the_f0_parts = os.path.splitext(the_f0)
         the_f = the_f0_parts[0]+the_ue_suffix+the_f0_parts[1]
+        print("THE_F=", the_f)
         the_ue_files.append(the_f)
     return the_ue_files
 
@@ -132,9 +134,20 @@ def  _retrieve_and_save_uncertainty_min(
                             dim='band',
                             skipna=False,
                             keep_attrs=True)
+        print("the_idx=", the_idx)
+        print("")
+        print("the_final_ue=", the_final_ue)
+        #the_result = the_final_data["band"].isel(
+        #    band=the_idx["band_data"]
+        #)
         the_result = the_final_ue["band"].isel(
             band=the_idx["band_data"]
         )
+        print("THE_RESULT=", the_result)
+        #the_result = the_final_ue["band"].isel(
+        #    band=the_idx)
+        #the_result = xr.DataArray.isel(the_ues,indexers=the_idx)
+        #print("THE_RESULT=",the_result)
         the_result.rio.to_raster(
             _get_output_ue_filename(
                 the_args.output[0], the_ue_suffix))

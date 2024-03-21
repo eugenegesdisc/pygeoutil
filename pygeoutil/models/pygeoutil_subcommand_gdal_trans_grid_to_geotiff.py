@@ -72,14 +72,8 @@ def process(the_args):
         gdal.DontUseExceptions()
 
     the_variables = _get_valid_subdatasets(the_args)
-    if the_args.debug:
-        print("THE_VARIABLES0=", the_variables)
     the_variables = _filter_variable_by_group(the_args, the_variables)
-    if the_args.debug:
-        print("THE_VARIABLES=", the_variables)
     the_variables = _filter_variable_by_variable_name(the_args, the_variables)
-    if the_args.debug:
-        print("THE_VARIABLES1=", the_variables)
     the_variables = _filter_variable_by_valid_dimension(the_args, the_variables)
     if the_args.debug:
         print("the_variables=", the_variables)
@@ -93,12 +87,10 @@ def _gdal_variable_to_tif(the_args, the_variables:list)->None:
         the_proj_auth, the_proj_value = the_args.projection
     if the_args.geotransform:
         the_geotransform = the_args.geotransform
-        print("the_geotransform=", the_geotransform)
     for the_var in the_variables:
         the_var_path = the_var[1].replace('/','_')
         the_output_file = (f"{the_output}"
                            f"{the_var_path}.tif")
-        print("\nthe_output_file=", the_output_file)
         _gdal_translate_variable_to_tif(the_var, the_output_file,
                                         the_proj_auth=the_proj_auth,
                                         the_proj_value=the_proj_value,
@@ -139,11 +131,8 @@ def _raster_center(raster):
     """This function return the pixel coordinates of the raster center 
     """
 
-    # We get the size (in pixels) of the raster
-    # using gdal
     width, height = raster.RasterXSize, raster.RasterYSize
 
-    # We calculate the middle of raster
     xmed = width / 2
     ymed = height / 2
 
@@ -154,17 +143,8 @@ def _rotate_gt(affine_matrix, angle, pivot=None):
     """This function generate a rotated affine matrix
     """
 
-    # The gdal affine matrix format is not the same
-    # of the Affine format, so we use a bullit-in function
-    # to change it
-    # see : https://github.com/sgillies/affine/blob/master/affine/__init__.py#L178
     affine_src = affine.Affine.from_gdal(*affine_matrix)
-    # We made the rotation. For this we calculate a rotation matrix,
-    # with the rotation method and we combine it with the original affine matrix
-    # Be carful, the star operator (*) is surcharged by Affine package. He make
-    # a matrix multiplication, not a basic multiplication
     affine_dst = affine_src * affine_src.rotation(angle, pivot)
-    # We retrun the rotated matrix in gdal format
     return affine_dst.to_gdal()
 
 def _rotate_dataset_degree(the_ds, angle:int):
@@ -204,7 +184,7 @@ def _guess_wkt_spatialreference(the_ds)->str:
         * GPM in Grid_GridHeader
 
     """
-    print("Error: To be Implemented")
+    print("Error: not implemented")
     return None
 
 def _get_wkt_spatialreference(the_proj_auth:str, the_proj_val:str)->str:
@@ -244,7 +224,6 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
     :return outpath:            The local system filepath to output dataset
     """
 
-    # set up the projection and geotransform
     if force_custom is True:
         projection = cust_projection
         geotransform = cust_geotransform
@@ -280,7 +259,7 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
         raise Exception("cannot write 1 dimensional data to tif")
 
     gtiff = gdal.GetDriverByName("GTiff")
-    outdata = gtiff.Create(outpath, xsize, ysize, numbands, _convert_dtype(numpy_array.dtype))
+    outdata = gtiff.Create(outpath, xsize, ysize, numbands, convert_dtype(numpy_array.dtype))
     outdata.SetProjection(projection)
     outdata.SetGeoTransform(geotransform)
 
@@ -306,40 +285,13 @@ def _filter_variable_by_valid_dimension(the_args, the_variables:list)->list:
     """
     the_ret_variables = the_variables
     the_x, the_y = _get_maximum_size_from_variables(the_variables)
-    print("the_x=", the_x, "the_y=", the_y)
-    print("valid_dimension", the_args.valid_dimension)
+    if the_args.debug:
+        print("the_x=", the_x, "the_y=", the_y)
+        print("valid_dimension", the_args.valid_dimension)
     if the_args.valid_dimension:
         the_ret_variables = _filter_variable_by_x_y_size(the_ret_variables,the_x, the_y)
 
     return the_ret_variables
-
-def _convert_dtype(numpy_dtype_string):
-    """
-    converts numpy dtype to a gdal data type object
-
-    :param numpy_dtype_string
-    :return gdal_datatype_object:
-    """
-
-    ndt = str(numpy_dtype_string)
-
-    if ndt == "float64":
-        return gdal.GDT_Float64
-
-    elif ndt == "float32":
-        return gdal.GDT_Float32
-
-    elif ndt == "uint32":
-        return gdal.GDT_UInt32
-
-    elif "unit" in ndt:
-        return gdal.GDT_UInt16
-
-    elif ndt == "int32":
-        return gdal.GDT_Int32
-
-    else:
-        return gdal.GDT_Int16
 
 def _filter_variable_by_x_y_size(
         the_variables:list, the_x_size:int, the_y_size:int)->list:
@@ -396,18 +348,13 @@ def _filter_variable_by_group(the_args, the_variables:list)->list:
         )
     """
     the_ret_variables = the_variables
-    # Filter the group
     the_group = the_args.group
     if not the_group:
         the_group = ""
     the_group = the_group.strip()
-    #if not the_group.startswith("/"):
-    #    the_group = f"/{the_group}"
 
-    if the_args.debug:
-       print(f"[/]*{the_group}")
     the_ret_variables = [the_val for the_val in the_ret_variables
-                         if re.search(f"[/]*{the_group}",the_val[1])]
+                         if re.search(f"^[/]*{the_group}",the_val[1])]
     return the_ret_variables
 
 def _filter_variable_by_variable_name(the_args, the_variables:list)->list:
@@ -422,7 +369,6 @@ def _filter_variable_by_variable_name(the_args, the_variables:list)->list:
         )
     """
     the_ret_variables = the_variables
-    # Filter the variable
     the_variable = the_args.variable
     if the_variable:
         the_ret_variables = [the_val for the_val in the_ret_variables
@@ -444,11 +390,6 @@ def _get_valid_subdatasets(the_args)->list:
     inputdataset=the_args.input[0]
     if the_args.debug:
         print("inputfile=", inputdataset)
-    #ingroup=None
-    #if the_args.group:
-    #    ingroup=the_args.group[0]
-    #if the_args.debug:
-    #    print("group for data:", ingroup)
     the_ds = gdal.Open(inputdataset, gdal.GA_ReadOnly)
 
     if the_ds.RasterCount>0:
@@ -487,13 +428,13 @@ def _parse_gdal_info_subset_value(the_value:str)->tuple[str, list[int], str]:
     the_ret_dtype = the_dtype_strs[0].lstrip('(').rstrip(')')
     return (the_ret_dataset, the_ret_shape, the_ret_dtype)
 
-def _replace_last(string, old, new):
-    if old not in string:
-        return string
+def _replace_last(a_string:str, old:str, new:str):
+    if old not in a_string:
+        return a_string
 
-    index = string.rfind(old)
+    index = a_string.rfind(old)
 
-    return string[:index] + new + string[index+len(old):]
+    return a_string[:index] + new + a_string[index+len(old):]
 
 def _parse_gdal_info_subset_value_shape(the_shape_str:str)->list[int]:
     the_shape_strs = the_shape_str.strip('[').rstrip(']').split('x')
@@ -547,17 +488,13 @@ def _gdal_to_geotiff(outname, result, nodata=None):
     if nodata is None:
         noDataVal = 0
 
-    # create dataset writer, specify dimensions
     dstds = driv.Create(outname, width, height, 1, the_d_type)
 
-    # define and set output geotransform
     gt = [-180, 0.1, 0, 90, 0, -0.1]
     dstds.SetGeoTransform(gt)
-    # create and set output projection
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(4326)
 
-    # write output array data
     dstds.GetRasterBand(1).SetNoDataValue(noDataVal)
     dstds.GetRasterBand(1).WriteArray(result.to_numpy())
     dstds = None
@@ -589,7 +526,6 @@ def _get_timedelta_fill_value(the_var_t):
     the_val_str = the_var_t.CodeMissingValue
     if the_val_str is None:
         print("Warning: no CodeMissingValue attribute found!")
-        # return the_ret, the_ret_unit
     else:
         the_val = int(the_val_str)
 

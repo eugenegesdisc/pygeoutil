@@ -6,7 +6,6 @@
 
 import xarray as xr
 import numpy as np
-from osgeo import gdal
 
 def add_cli_arg(cmd_parsers):
     """
@@ -51,18 +50,10 @@ def to_geotiff(args):
     if args.group:
         ingroup=args.group[0]
     invariables=args.variable
-    print("Here....", inputdataset, "outputfile=", outfilename)
-    # When decode_cf turned off, the original data type will be kept. 
-    # This would lead no covertion to timedelta64. The subroutine to handle
-    # timedelta64 datatype would be of no use.
-    # With proper drivers installed, xarray can open different data types.
     with xr.open_dataset(inputdataset, group=ingroup, decode_cf=False) as the_ds:
         if invariables is None:
             invariables=_to_geotiff_get_variables(the_ds)
-        print("dataset=", the_ds)
-        print("invaraibles=", invariables)
         for the_v in invariables:
-            print("v=",the_v)
             _to_geotiff(the_ds[the_v], outfilename+"."+the_v)
 
 
@@ -107,7 +98,6 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
 
         gdal_projection = gdal_dataset.GetProjection()
 
-        # only uses the custom projection if gdal metadata is bad
         if gdal_projection == "":
             projection = cust_projection
         else:
@@ -115,18 +105,14 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
 
         gdal_geotransform = gdal_dataset.GetGeoTransform()
 
-        # only uses the custom geotransform if gdal geotransform is default (bad)
         if gdal_geotransform == (0.0, 1.0, 0.0, 0.0, 0.0, 1.0):
             geotransform = cust_geotransform
         else:
             geotransform = gdal_geotransform
 
-
-    # set up the numpy array
     numpy_array = gdal_dataset.ReadAsArray()
     shape = numpy_array.shape
 
-    # determine its shape
     if len(shape) == 2:
         xsize = shape[1]
         ysize = shape[0]
@@ -138,13 +124,11 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
     else:
         raise Exception("cannot write 1 dimensional data to tif")
 
-    # create the tiff
     gtiff = gdal.GetDriverByName("GTiff")
-    outdata = gtiff.Create(outpath, xsize, ysize, numbands, _convert_dtype(numpy_array.dtype))
+    outdata = gtiff.Create(outpath, xsize, ysize, numbands, convert_dtype(numpy_array.dtype))
     outdata.SetProjection(projection)
     outdata.SetGeoTransform(geotransform)
 
-    # write each band
     for i in range(numbands):
         outraster = outdata.GetRasterBand(i+1)
         outraster.WriteArray(numpy_array, 0, 0)
@@ -154,38 +138,8 @@ def _gdal_dataset_to_tif(gdal_dataset, outpath, cust_projection = None,
 
     return outpath
 
-def _convert_dtype(numpy_dtype_string):
-    """
-    converts numpy dtype to a gdal data type object
-
-    :param numpy_dtype_string
-    :return gdal_datatype_object:
-    """
-
-    ndt = str(numpy_dtype_string)
-
-    if ndt == "float64":
-        return gdal.GDT_Float64
-
-    elif ndt == "float32":
-        return gdal.GDT_Float32
-
-    elif ndt == "uint32":
-        return gdal.GDT_UInt32
-
-    elif "unit" in ndt:
-        return gdal.GDT_UInt16
-
-    elif ndt == "int32":
-        return gdal.GDT_Int32
-
-    else:
-        return gdal.GDT_Int16
-
-
 def _to_geotiff(the_var, the_out_tif):
     the_time = 'time'
-    # print(the_var)
     if not hasattr(the_var, the_time):
         print("Warning: it should not be here. Not prcessed.") # to be processed
     else:
@@ -225,7 +179,6 @@ def _get_timedelta_fill_value(the_var_t):
     the_val_str = the_var_t.CodeMissingValue
     if the_val_str is None:
         print("Warning: no CodeMissingValue attribute found!")
-        # return the_ret, the_ret_unit
     else:
         the_val = int(the_val_str)
 
