@@ -421,6 +421,7 @@ def _get_smallest_factor(the_num):
 def _gdal_save_to_geotiff(
         args, outfilename, the_data, grid_def,
         fill_value=None):
+    gdal.UseExceptions()
     the_drive = gdal.GetDriverByName('GTiff')
     height, width=the_data.shape
     the_type = gdal_array.NumericTypeCodeToGDALTypeCode(the_data.dtype)
@@ -438,7 +439,6 @@ def _gdal_save_to_geotiff(
 
     srs = osr.SpatialReference()
     srs.ImportFromProj4(grid_def.proj4_string)
-    srs.SetProjCS(grid_def.proj_id)
     srs_wkt = srs.ExportToWkt()
     if args.debug:
         print("srs_wkt=",srs_wkt)
